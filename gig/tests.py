@@ -1389,6 +1389,28 @@ class GigWatchTest(GigTestBase):
         message = mail.outbox[0]
         self.assertIn('1:30', message.body)
 
+    def test_watch_no_member_timezone(self):
+        """ without a member time zone, the watcher email uses the band's zone """
+        g, _, p = self.assoc_joe_and_create_gig()
+        self.joeuser.preferences.current_timezone = None
+        self.joeuser.preferences.save()
+        g.watchers.add(self.joeuser)
+        g.date = datetime(2024, 1, 1, 16, 30, 0, tzinfo=utc)
+        g.save()
+        g.band.timezone = "America/Chicago"
+        g.band.save()
+
+        mail.outbox = []
+        p.set_status(PlanStatusChoices.DEFINITELY)
+        timezone.activate("Asia/Tokyo")
+        try:
+            alert_watchers()
+            self.assertEqual(timezone.get_current_timezone_name(), "Asia/Tokyo")
+        finally:
+            timezone.deactivate()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('10:30', mail.outbox[0].body)
+
 class GigSecurityTest(GigTestBase):
     def test_gig_detail_access(self):
         g, _, _ = self.assoc_joe_and_create_gig()

@@ -36,6 +36,7 @@ from datetime import timedelta
 from collections import Counter
 import uuid
 import calendar
+import zoneinfo
 from go3.settings import URL_BASE
 
 def band_editor_required(func):
@@ -262,9 +263,13 @@ def send_watcher_email(member, plans):
 
     # since the plans might involve different bands from different places, use the
     # member's timezone for now. Eventually localize each gig to its own zone.
-    timezone.activate(member.preferences.current_timezone)
+    try:
+        zone = zoneinfo.ZoneInfo(member.preferences.current_timezone)
+    except (TypeError, ValueError, zoneinfo.ZoneInfoNotFoundError):
+        zone = plans.first().gig.band.timezone
 
-    msg = prepare_email(member.as_email_recipient(), 'email/watcher_email.md', context)
+    with timezone.override(zone):
+        msg = prepare_email(member.as_email_recipient(), 'email/watcher_email.md', context)
     send_messages_async([msg])
 
 @login_required
