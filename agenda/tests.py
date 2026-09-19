@@ -191,10 +191,11 @@ class AgendaTest(GigTestBase):
         self.joeuser.preferences.refresh_from_db()
         self.assertEqual(self.joeuser.preferences.current_timezone, 'Europe/Berlin')
 
-        response = c.get(f"{reverse('home')}?zone=Not/AZone")
-        self.assertEqual(response.status_code, 200)
-        self.joeuser.preferences.refresh_from_db()
-        self.assertEqual(self.joeuser.preferences.current_timezone, 'Europe/Berlin')
+        for bad_zone in ['Not/AZone', '', '../etc']:
+            response = c.get(f"{reverse('home')}?zone={bad_zone}")
+            self.assertEqual(response.status_code, 200)
+            self.joeuser.preferences.refresh_from_db()
+            self.assertEqual(self.joeuser.preferences.current_timezone, 'Europe/Berlin')
 
     def test_invalid_stored_zone(self):
         """ a stored time zone that can't be loaded falls back to the default zone """

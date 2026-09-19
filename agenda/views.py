@@ -35,11 +35,13 @@ def AgendaSelector(request):
     if request.user.band_count == 0:
         return redirect("/member")
 
-    newzone = request.GET.get('zone')
-    if newzone and newzone in zoneinfo.available_timezones():
+    try:
+        newzone = request.GET['zone']
+        timezone.activate(newzone)
         request.user.preferences.current_timezone = newzone
         request.user.preferences.save()
-        timezone.activate(newzone)
+    except (KeyError, ValueError, zoneinfo.ZoneInfoNotFoundError):
+        pass
 
 
     view_selector = {
