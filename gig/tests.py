@@ -795,6 +795,21 @@ class GigTest(GigTestBase):
         self.assertEqual(p.status, PlanStatusChoices.DONT_KNOW)
         self.assertLessEqual((p.snooze_until.date() - now.date()).days, 7)
 
+    @freeze_time("2027-01-01 12:00:00")
+    def test_answer_snooze_counts_local_days(self):
+        """ days until the gig are counted on the band's local calendar """
+        self.band.timezone = "America/New_York"
+        self.band.save()
+        # 8 local days away, but 9 days away in UTC
+        g, _, p = self.assoc_joe_and_create_gig(call_date="01/09/2027", call_time="8:00 pm")
+        response = self.client.get(
+            reverse("gig-answer", args=[p.id, PlanStatusChoices.DONT_KNOW])
+        )
+        p.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(p.snooze_until, g.date - timedelta(days=2))
+
     def test_answer_snooze_too_short(self):
         g, _, p = self.assoc_joe_and_create_gig()
         g.date = timezone.now() + timedelta(days=1)
