@@ -178,6 +178,48 @@ class AgendaTest(GigTestBase):
         self.assertEqual(response.content.decode('ascii').count("xyzzy"), 1)
         self.assertEqual(response.content.decode('ascii').count("Tomorrow"), 1)
 
+    def test_agenda_zone_update(self):
+        """ only valid time zones can be set from the schedule page """
+        self.assoc_user(self.joeuser)
+        self.joeuser.preferences.current_timezone = 'America/New_York'
+        self.joeuser.preferences.save()
+        c = Client()
+        c.force_login(self.joeuser)
+
+        response = c.get(f"{reverse('home')}?zone=Europe/Berlin")
+        self.assertEqual(response.status_code, 200)
+        self.joeuser.preferences.refresh_from_db()
+        self.assertEqual(self.joeuser.preferences.current_timezone, 'Europe/Berlin')
+
+        response = c.get(f"{reverse('home')}?zone=Not/AZone")
+        self.assertEqual(response.status_code, 200)
+        self.joeuser.preferences.refresh_from_db()
+        self.assertEqual(self.joeuser.preferences.current_timezone, 'Europe/Berlin')
+
+    def test_invalid_stored_zone(self):
+        """ a stored time zone that can't be loaded falls back to the default zone """
+        self.assoc_user(self.joeuser)
+        self.create_gig_form(contact=self.joeuser, title="xyzzy")
+        full_day = self.create_gig_form(contact=self.joeuser, title="xyzzy")
+        full_day.is_full_day = True
+        full_day.save()
+        self.joeuser.preferences.current_timezone = 'Not/AZone'
+        self.joeuser.preferences.agenda_layout = AgendaLayoutChoices.ONE_LIST
+        self.joeuser.preferences.save()
+        c = Client()
+        c.force_login(self.joeuser)
+
+        response = c.get(reverse('home'))
+        self.assertEqual(response.status_code, 200)
+        response = c.get(f'/plans/{int(AgendaLayoutChoices.ONE_LIST)}/0')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "xyzzy", count=2)
+
+        self.joeuser.preferences.current_timezone = 'UTC'
+        self.joeuser.preferences.save()
+        utc_response = c.get(f'/plans/{int(AgendaLayoutChoices.ONE_LIST)}/0')
+        self.assertEqual(response.content, utc_response.content)
+
     def test_agenda_occasionals(self):
         _ = self.assoc_user(self.joeuser)
         janeassoc = self.assoc_user(self.janeuser)

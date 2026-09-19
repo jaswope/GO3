@@ -25,6 +25,7 @@ from band.models import Assoc
 from band.util import AssocStatusChoices
 from datetime import datetime
 import json
+import zoneinfo
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 
@@ -34,16 +35,11 @@ def AgendaSelector(request):
     if request.user.band_count == 0:
         return redirect("/member")
 
-    try:
-        newzone = request.GET['zone']
+    newzone = request.GET.get('zone')
+    if newzone and newzone in zoneinfo.available_timezones():
         request.user.preferences.current_timezone = newzone
         request.user.preferences.save()
-    except KeyError:
-        pass
-
-    if request.user:
-        request.session["django_timezone"] = request.user.preferences.current_timezone
-        timezone.activate(request.user.preferences.current_timezone)
+        timezone.activate(newzone)
 
 
     view_selector = {

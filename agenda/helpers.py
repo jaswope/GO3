@@ -25,6 +25,7 @@ from pytz import timezone as pytz_timezone
 from datetime import timedelta
 
 from django.db.models import Q
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from gig.models import Gig, Plan, GigStatusChoices
@@ -91,7 +92,7 @@ def agenda_gigs(request, the_type, the_band=None):
         else:
             request.user.preferences.agenda_show_location = True
     request.user.preferences.save()
-    user_timezone = pytz_timezone(request.user.timezone)
+    user_timezone = timezone.get_current_timezone()
 
     # group plans by year
     yearly_plans = {}
