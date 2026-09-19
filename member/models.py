@@ -154,13 +154,6 @@ class Member(AbstractUser):
     def clean_future_plans(self):
         """ future plans, minus bands the member has hidden from their schedule """
         return Plan.member_plans.future_plans(self).exclude(assoc__hide_from_schedule=True)
-
-    @property
-    def future_not_declined_plans(self):
-        """ clean future plans, minus canceled gigs and gigs the member can't or won't do """
-        plans = self.clean_future_plans.exclude(gig__status=GigStatusChoices.CANCELED)
-        plans = plans.exclude(status__in=[PlanStatusChoices.CANT_DO_IT, PlanStatusChoices.NOT_INTERESTED])
-        return plans
     
     @property
     def calendar_plans(self):
@@ -265,6 +258,7 @@ class MemberPreferences(models.Model):
     calendar_show_only_committed = models.BooleanField(default=False, verbose_name=_('Calendar shows only gigs I can do (or maybe can do)'))
     agenda_show_time = models.BooleanField(default=True, verbose_name=_('Show gig time on schedule'))
     agenda_show_location = models.BooleanField(default=False)
+    agenda_hide_declined = models.BooleanField(default=False)
     agenda_layout = models.IntegerField(choices=AgendaLayoutChoices.choices, 
                                         default=AgendaLayoutChoices.ONE_LIST,
                                         verbose_name=_('Schedule page layout'))

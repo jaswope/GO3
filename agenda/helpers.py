@@ -28,6 +28,7 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 
 from gig.models import Gig, Plan, GigStatusChoices
+from gig.util import PlanStatusChoices
 from band.models import Band, Assoc, Section
 from band.util import AssocStatusChoices
 from member.util import AgendaChoices, AgendaLayoutChoices
@@ -56,9 +57,6 @@ def _get_agenda_plans(user, the_type, the_band):
     elif the_type == AgendaLayoutChoices.HAS_RESPONSE:
         the_plans = user.future_plans.all()
         the_title = _("Upcoming Gigs")
-    elif the_type == AgendaLayoutChoices.HIDE_DECLINED_AND_CANCELED:
-        the_plans = user.future_not_declined_plans
-        the_title = _("Upcoming Gigs")
     else:
         # the type is actually the band ID
         try:
@@ -76,13 +74,15 @@ def _get_agenda_plans(user, the_type, the_band):
     if user.preferences.hide_canceled_gigs:
         the_plans = the_plans.exclude(gig__status=GigStatusChoices.CANCELED)
 
+    if user.preferences.agenda_hide_declined:
+        the_plans = the_plans.exclude(gig__status=GigStatusChoices.CANCELED)
+        the_plans = the_plans.exclude(status__in=[PlanStatusChoices.CANT_DO_IT, PlanStatusChoices.NOT_INTERESTED])
+
     return the_plans, the_title
 
 
 @login_required
 def agenda_gigs(request, the_type, the_band=None):
-
-    the_plans, the_title = _get_agenda_plans(request.user, the_type, the_band)
 
     # make this the user's preference now
     request.user.preferences.agenda_layout = the_type
@@ -92,7 +92,14 @@ def agenda_gigs(request, the_type, the_band=None):
             request.user.preferences.agenda_show_location = False
         else:
             request.user.preferences.agenda_show_location = True
+    if request.GET.get('hide_declined'):
+        if request.GET.get('hide_declined').lower() != 'true':
+            request.user.preferences.agenda_hide_declined = False
+        else:
+            request.user.preferences.agenda_hide_declined = True
     request.user.preferences.save()
+
+    the_plans, the_title = _get_agenda_plans(request.user, the_type, the_band)
     user_timezone = pytz_timezone(request.user.timezone)
 
     # group plans by year
@@ -114,6 +121,7 @@ def agenda_gigs(request, the_type, the_band=None):
                         'title': the_title,
                         'single_band': the_type == AgendaLayoutChoices.BY_BAND,
                         'show_locations': request.user.preferences.agenda_show_location,
+                        'hide_declined': request.user.preferences.agenda_hide_declined,
                     }
     )
 
@@ -198,8 +206,6 @@ def get_plans_count(request, *args, **kw):
         count = request.user.clean_future_plans.count()
     elif kw['the_type'] == AgendaLayoutChoices.NEED_RESPONSE:
         count = request.user.future_noplans.count()
-    elif kw['the_type'] == AgendaLayoutChoices.HIDE_DECLINED_AND_CANCELED:
-        count = request.user.future_not_declined_plans.count()
     else:
         count = request.user.clean_future_plans.filter(assoc__band=kw['the_band']).count()
     return HttpResponse(count)
