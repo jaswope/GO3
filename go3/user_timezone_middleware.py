@@ -1,4 +1,4 @@
-import zoneinfo
+from zoneinfo import ZoneInfoNotFoundError
 
 from django.utils import timezone
 
@@ -11,6 +11,6 @@ class UserTimezoneMiddleware:
         if request.user and not request.user.is_anonymous and request.user.preferences.current_timezone:
             try:
                 timezone.activate(request.user.preferences.current_timezone)
-            except (zoneinfo.ZoneInfoNotFoundError, ValueError):
+            except (ZoneInfoNotFoundError, ValueError):
                 pass
         return self.get_response(request)

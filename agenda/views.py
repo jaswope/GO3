@@ -25,7 +25,7 @@ from band.models import Assoc
 from band.util import AssocStatusChoices
 from datetime import datetime
 import json
-import zoneinfo
+from zoneinfo import ZoneInfoNotFoundError
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 
@@ -40,7 +40,7 @@ def AgendaSelector(request):
         timezone.activate(newzone)
         request.user.preferences.current_timezone = newzone
         request.user.preferences.save()
-    except (KeyError, ValueError, zoneinfo.ZoneInfoNotFoundError):
+    except (KeyError, ValueError, ZoneInfoNotFoundError):
         pass
 
 
