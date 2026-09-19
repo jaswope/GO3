@@ -518,6 +518,52 @@ class GridTest(GigTestBase):
         gigs = loads(response.content)
         self.assertEqual(len(gigs), 3)
 
+    def test_grid_month_boundary(self):
+        """ the grid month runs from local midnight in the band's time zone """
+        self.band.timezone = 'America/New_York'
+        self.band.save()
+        self.assoc_user(self.joeuser)
+        self.create_gig_form(contact=self.joeuser, title="late", call_date="01/31/2100", call_time="11:58 pm")
+        c = Client()
+        c.force_login(self.joeuser)
+
+        titles = {}
+        for month in [0, 1]:
+            response = c.post(reverse('grid-gigs'), data={'band': self.band.id, 'month': month, 'year': 2100})
+            self.assertEqual(response.status_code, 200)
+            titles[month] = [g['title'] for g in loads(response.content)]
+        self.assertEqual(titles[0], ["late"])
+        self.assertEqual(titles[1], [])
+
+    def heatmap_dates(self, year):
+        c = Client()
+        c.force_login(self.joeuser)
+        response = c.post(reverse('grid-heatmap'), data={'band': self.band.id, 'year': year})
+        self.assertEqual(response.status_code, 200)
+        return sorted(d['date'] for d in loads(response.content))
+
+    def test_heatmap_band_timezone_east(self):
+        """ heatmap days are local dates in the band's time zone """
+        self.band.timezone = 'Europe/Berlin'
+        self.band.save()
+        self.assoc_user(self.joeuser)
+        self.create_gig_form(contact=self.joeuser, call_date="01/01/2100", call_time="12:30 am")
+        self.create_gig_form(contact=self.joeuser, call_date="03/01/2100", call_time="12:30 am")
+
+        self.assertEqual(self.heatmap_dates(2100), ["2100-01-01", "2100-03-01"])
+        self.assertEqual(self.heatmap_dates(2099), [])
+
+    def test_heatmap_band_timezone_west(self):
+        """ heatmap days are local dates in the band's time zone """
+        self.band.timezone = 'America/Los_Angeles'
+        self.band.save()
+        self.assoc_user(self.joeuser)
+        self.create_gig_form(contact=self.joeuser, call_date="01/31/2100", call_time="8:00 pm")
+        self.create_gig_form(contact=self.joeuser, call_date="12/31/2100", call_time="8:00 pm")
+
+        self.assertEqual(self.heatmap_dates(2100), ["2100-01-31", "2100-12-31"])
+        self.assertEqual(self.heatmap_dates(2101), [])
+
 class AgendaTagTests(TestCase):
     def test_is_url_valid_url(self):
         self.assertTrue(is_url("http://a.com"))

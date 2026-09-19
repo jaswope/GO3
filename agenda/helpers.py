@@ -215,16 +215,21 @@ def grid_heatmap(request, *args, **kw):
     year = int(request.POST['year'])
     band_id = int(request.POST['band'])
 
+    zone = ZoneInfo(Band.objects.get(id=band_id).timezone)
+    start = datetime.datetime(year=year, month=1, day=1, tzinfo=zone)
+    end = start + relativedelta(years=1)
     the_gigs = Gig.objects.filter(
-        date__year=year,
+        date__gte=start,
+        date__lt=end,
         band=band_id,
         trashed_date__isnull=True,
         ).order_by('date').values('date')
 
     uncooked_data = {}
     for g in the_gigs:
-        m = g['date'].month
-        d = g['date'].day
+        local_date = g['date'].astimezone(zone)
+        m = local_date.month
+        d = local_date.day
         cooked_date = f"{year}-{m:02}-{d:02}"
         if cooked_date in uncooked_data:
             uncooked_data[cooked_date] += 1
@@ -269,7 +274,7 @@ def grid_gigs(request, *args, **kw):
 
     # can't just filter by date__month because that doesn't seem to work in mariadb
     band = Band.objects.get(id=band_id)
-    start = datetime.datetime(year=year, month=month+1, day=1, tzinfo=pytz_timezone(band.timezone))
+    start = datetime.datetime(year=year, month=month+1, day=1, tzinfo=ZoneInfo(band.timezone))
     end = start + relativedelta(months=1)
     gigs = Gig.objects.filter(
         date__gte=start,
