@@ -444,6 +444,29 @@ class CalendarTest(GigTestBase):
         data = loads(response.content)
         self.assertEqual(len(data), 1)
 
+    def test_full_day_band_timezone(self):
+        """ full-day gigs land on their local date in the band's time zone """
+        self.band.timezone = 'Europe/Berlin'
+        self.band.save()
+        self.assoc_user(self.joeuser)
+        self.create_gig_form(contact=self.joeuser, title="full day", is_full_day=True)
+        self.create_gig_form(contact=self.joeuser, title="no end")
+
+        c = Client()
+        c.force_login(self.joeuser)
+        startdate = datetime(2099, 12, 1, 0, 0, 0, 0, dttimezone.utc)
+        enddate = datetime(2100, 2, 1, 0, 0, 0, 0, dttimezone.utc)
+        response = c.get(reverse('calendar-events', args=[self.band.id]), data={
+            'start': startdate.isoformat(),
+            'end': enddate.isoformat(),
+        })
+
+        self.assertEqual(response.status_code, 200)
+        data = {event['title']: event for event in loads(response.content)}
+        self.assertEqual(data['full day']['start'], '2100-01-02')
+        self.assertEqual(data['full day']['end'], '2100-01-03')
+        self.assertNotIn('end', data['no end'])
+
 class GridTest(GigTestBase):
     def test_grid(self):
         self.assoc_user(self.joeuser)

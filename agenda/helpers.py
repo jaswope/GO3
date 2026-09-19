@@ -23,6 +23,7 @@ from dateutil.parser import parse
 from dateutil.relativedelta import relativedelta
 from pytz import timezone as pytz_timezone
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 from django.db.models import Q
 from django.utils import timezone
@@ -158,13 +159,15 @@ def calendar_events(request, pk):
 
         enddate = g.enddate if g.enddate else g.date
         if g.is_full_day:
-            gig['start'] = str(g.date.date())
+            zone = ZoneInfo(g.band.timezone)
+            gig['start'] = str(g.date.astimezone(zone).date())
             # Like icalendar, the end date is expected to be non-inclusive
-            gig['end'] = str(enddate.date() + timedelta(days=1))
+            gig['end'] = str(enddate.astimezone(zone).date() + timedelta(days=1))
             gig['allDay'] = True
         else:
             gig['start'] = str(g.date)
-            gig['end'] = str(g.enddate)
+            if g.enddate:
+                gig['end'] = str(g.enddate)
 
         gig['url'] = f'/gig/{g.id}'
 
