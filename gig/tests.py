@@ -27,6 +27,7 @@ from .helpers import send_reminder_email, create_gig_series
 from .tasks import send_snooze_reminders
 from .tasks import archive_old_gigs, alert_watchers
 from datetime import timedelta, datetime, timezone as dttimezone
+from zoneinfo import ZoneInfo
 from django.urls import reverse
 from django.utils import timezone
 from pytz import utc, timezone as pytimezone
@@ -1083,6 +1084,36 @@ class GigTest(GigTestBase):
         self.assertEqual(g3.date - g2.date, timedelta(days=7))
         self.assertEqual(g3.setdate - g2.setdate, timedelta(days=7))
         self.assertEqual(g3.enddate - g2.enddate, timedelta(days=7))
+
+    @freeze_time("2027-01-01")
+    def test_series_across_dst_change(self):
+        """ series copies keep their local wall-clock times across a clock change """
+        self.band.timezone = "America/New_York"
+        self.band.save()
+        self.assoc_user(self.joeuser)
+        zone = ZoneInfo("America/New_York")
+        for repeat, dates in [
+            ("week", ["2027-10-28", "2027-11-04", "2027-11-11"]),
+            ("month", ["2027-10-28", "2027-11-28", "2027-12-28"]),
+            ("day", ["2027-11-06", "2027-11-07", "2027-11-08"]),
+        ]:
+            Gig.objects.all().delete()
+            first = datetime.strptime(dates[0], "%Y-%m-%d")
+            self.create_gig_form(
+                contact=self.joeuser,
+                call_date=first.strftime("%m/%d/%Y"),
+                call_time="7:00 pm",
+                set_time="8:00 pm",
+                end_time="11:00 pm",
+                add_series=True,
+                total_gigs=3,
+                repeat=repeat,
+            )
+            gigs = Gig.objects.order_by("date")
+            self.assertEqual([g.date.astimezone(zone).strftime("%Y-%m-%d %H:%M") for g in gigs],
+                             [f"{d} 19:00" for d in dates], repeat)
+            self.assertEqual([g.setdate.astimezone(zone).strftime("%H:%M") for g in gigs], ["20:00"] * 3, repeat)
+            self.assertEqual([g.enddate.astimezone(zone).strftime("%H:%M") for g in gigs], ["23:00"] * 3, repeat)
 
     def test_address_url(self):
         g, _, _ = self.assoc_joe_and_create_gig(address="http://pbs.org")
