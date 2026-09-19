@@ -23,6 +23,7 @@ from band.util import AssocStatusChoices
 from band.helpers import _get_confirmed_public_gigs
 from gig.util import GigStatusChoices, PlanStatusChoices
 from .models import Gig, Plan, GigComment
+from .forms import GigForm
 from .helpers import send_reminder_email, create_gig_series
 from .tasks import send_snooze_reminders
 from .tasks import archive_old_gigs, alert_watchers
@@ -901,6 +902,42 @@ class GigTest(GigTestBase):
             end_time="2:00 pm",
             expect_code=200,
         )
+
+    @freeze_time("2027-01-01")
+    def test_time_in_dst_gap(self):
+        """ times skipped by a spring-forward clock change are rejected on the field they came from """
+        self.assoc_user(self.joeuser)
+        base = {"title": "gap", "contact": self.joeuser.id, "status": GigStatusChoices.UNCONFIRMED, "notification": "no_email"}
+        # America/Havana changes its clocks at midnight, so whole dates can fall in the gap too
+        cases = [
+            ("America/New_York", "call_time", {"call_date": "03/14/2027", "call_time": "2:30 am"}),
+            ("America/New_York", "set_time", {"call_date": "03/14/2027", "call_time": "1:00 am", "set_time": "2:30 am"}),
+            ("America/New_York", "end_time", {"call_date": "03/14/2027", "call_time": "1:00 am", "end_time": "2:30 am"}),
+            ("America/Havana", "call_date", {"is_full_day": True, "call_date": "03/14/2027"}),
+            ("America/Havana", "end_date", {"is_full_day": True, "call_date": "03/13/2027", "end_date": "03/14/2027"}),
+            ("America/Havana", "rsvp_date", {"call_date": "03/20/2027", "call_time": "7:00 pm", "rsvp_date": "03/14/2027"}),
+        ]
+        for zone, field, data in cases:
+            self.band.timezone = zone
+            form = GigForm(band=self.band, user=self.joeuser, data={**base, **data})
+            self.assertFalse(form.is_valid(), field)
+            self.assertEqual(list(form.errors), [field], field)
+            self.assertEqual(form.errors[field],
+                             [f"This time doesn't exist in {zone} on 03/14/2027 because the clocks change."], field)
+
+        self.band.timezone = "America/New_York"
+        self.band.save()
+        before = Gig.objects.count()
+        self.create_gig_form(contact=self.joeuser, call_date="03/14/2027", call_time="2:30 am", expect_code=200)
+        self.assertEqual(Gig.objects.count(), before)
+
+    @freeze_time("2027-01-01")
+    def test_time_in_dst_overlap(self):
+        """ times repeated by a fall-back clock change use the first occurrence """
+        self.band.timezone = "America/New_York"
+        self.band.save()
+        g, _, _ = self.assoc_joe_and_create_gig(call_date="11/07/2027", call_time="1:30 am")
+        self.assertEqual(g.date, datetime(2027, 11, 7, 5, 30, tzinfo=dttimezone.utc))
 
     # testing gig comments
     def send_comment(self, user, gig, text):
